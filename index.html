@@ -148,7 +148,7 @@ function modalForm(titulo, p, ehNovo){
       '<div id="formmsg"></div>'+
       '<div class="grid">'+
         '<div class="full"><label>Nome *</label><input id="f_nome" value="'+(p&&p.nome?p.nome.replace(/"/g,'&quot;'):'')+'"></div>'+
-        '<div class="full"><label>Email *</label><input id="f_email" type="email" value="'+(p&&p.email?p.email:'')+'" '+(ehNovo?'':'disabled')+'>'+(ehNovo?'':'<div class="hint">O email não pode ser alterado.</div>')+'</div>'+
+        '<div class="full"><label>Email *</label><input id="f_email" type="email" value="'+(p&&p.email?p.email:'')+'">'+(ehNovo?'':'<div class="hint">Mudar o email atualiza o login da pessoa.</div>')+'</div>'+
         (ehNovo?'<div class="full"><label>Senha inicial *</label><input id="f_senha" type="text" placeholder="mín. 6 caracteres"></div>'
                :'<div class="full"><label>Nova senha (opcional)</label><input id="f_senha" type="text" placeholder="deixe vazio para manter"></div>')+
         '<div><label>Papel *</label><select id="f_papel" onchange="toggleEquipe()">'+
@@ -173,6 +173,7 @@ function modalForm(titulo, p, ehNovo){
   window._ov = ov;
   window._editId = p ? p.id : null;
   window._ehNovo = ehNovo;
+  window._emailOrig = (p && p.email) ? String(p.email).toLowerCase() : '';
   toggleEquipe();
   document.getElementById('btnSalvar').onclick = salvar;
 }
@@ -213,6 +214,11 @@ async function salvar(){
   } else {
     const body = { id: window._editId, nome, papel, gerente_id, whatsapp_instancia:wa, telefone:tel, cpf, creci, data_entrada };
     if(senha) body.senha = senha;
+    // Só envia o email se ele mudou (evita reprocessar o Auth à toa).
+    if(email && email !== window._emailOrig){
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ formMsg('Email inválido.'); btn.disabled=false; btn.textContent='Salvar'; return; }
+      body.email = email;
+    }
     j = await api('/pessoas/editar','POST',body);
   }
 
