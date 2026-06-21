@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inerente · Cadastro de Pessoas</title>
+<style>
+  :root{--bg:#0a0f1c;--card:#13192a;--card2:#1a2236;--bd:#25304d;--tx:#e8eaf0;--mut:#aab4cc;--pri:#37425f;--ok:#16a34a;--bad:#dc2626;--ac:#3b82f6}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px 18px 60px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+  h1{font-size:22px;margin:0;font-weight:700}
+  .sub{color:var(--mut);font-size:13px;margin-top:2px}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;font-size:14px;font-weight:600}
+  .btn-pri{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;padding:11px 20px}
+  .btn-sec{background:var(--card2);color:var(--tx);padding:9px 16px;border:1px solid var(--bd)}
+  .btn-mini{background:var(--card2);color:var(--mut);padding:6px 12px;border:1px solid var(--bd);font-size:12px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--bd);font-size:13px}
+  th{color:var(--mut);font-weight:600;background:var(--card2)}
+  tr:last-child td{border-bottom:none}
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+  .b-dir{background:#7f1d1d;color:#fecaca}
+  .b-ger{background:#1e3a8a;color:#bfdbfe}
+  .b-cor{background:#064e3b;color:#a7f3d0}
+  .b-esc{background:#4c1d95;color:#ddd6fe}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .modal{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:24px;max-width:560px;width:100%;max-height:90vh;overflow:auto}
+  .modal h2{margin:0 0 18px;font-size:18px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .full{grid-column:1/-1}
+  label{display:block;font-size:12px;color:var(--mut);margin-bottom:5px;font-weight:600}
+  input,select{width:100%;padding:10px 12px;background:var(--card2);border:1px solid var(--bd);border-radius:9px;color:var(--tx);font-size:14px;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--ac)}
+  .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+  .msg{padding:11px 14px;border-radius:9px;font-size:13px;margin-bottom:14px}
+  .msg-erro{background:#3f1d1d;color:#fca5a5;border:1px solid #7f1d1d}
+  .msg-ok{background:#14321f;color:#86efac;border:1px solid #166534}
+  .empty{text-align:center;color:var(--mut);padding:50px 20px}
+  .carregando{text-align:center;color:var(--mut);padding:40px}
+  .hint{font-size:11px;color:var(--mut);margin-top:4px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="carregando">Carregando…</div>
+</div>
+
+<script>
+const BASE = 'https://agentes-de-whatsapp-production.up.railway.app';
+let JWT = null;       // JWT do Supabase do diretor (vem do Portal via ?jwt=)
+let PESSOAS = [];
+let GERENTES = [];
+
+// ---------- Auth: pega o JWT da URL e limpa o histórico ----------
+(function initAuth(){
+  const params = new URLSearchParams(window.location.search);
+  const jwt = params.get('jwt');
+  if(jwt){
+    JWT = jwt;
+    try{ sessionStorage.setItem('pessoas_jwt', jwt); }catch(e){}
+    // limpa a URL na hora (não deixa o token no histórico)
+    try{ window.history.replaceState(null,'',window.location.pathname); }catch(e){}
+  } else {
+    try{ JWT = sessionStorage.getItem('pessoas_jwt'); }catch(e){}
+  }
+})();
+
+function telaPortal(msg){
+  document.getElementById('app').innerHTML =
+    '<div style="min-height:70vh;display:flex;align-items:center;justify-content:center">'+
+    '<div style="max-width:440px;text-align:center;background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:36px 28px">'+
+    '<div style="font-size:42px;margin-bottom:14px">🔒</div>'+
+    '<h1 style="font-size:20px;margin:0 0 10px">Acesse pelo Portal</h1>'+
+    '<p style="color:var(--mut);font-size:14px;line-height:1.5;margin:0 0 22px">'+(msg||'Este módulo é exclusivo do Diretor. Entre pelo Portal Inerente.')+'</p>'+
+    '<a href="https://portalinerente.netlify.app" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#37425f,#1d2436);color:#fff;text-decoration:none;border-radius:12px;font-weight:600">Ir para o Portal</a>'+
+    '</div></div>';
+}
+
+async function api(path, method, body){
+  const o = { method: method||'GET', headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+JWT } };
+  if(body) o.body = JSON.stringify(body);
+  const r = await fetch(BASE+path, o);
+  return r.json();
+}
+
+function papelDe(p){
+  if(p.is_diretor) return {k:'diretor',l:'Diretor',c:'b-dir'};
+  if(p.is_gerente) return {k:'gerente',l:'Gerente',c:'b-ger'};
+  if(p.is_corretor) return {k:'corretor',l:'Corretor',c:'b-cor'};
+  if(p.is_escritorio) return {k:'escritorio',l:'Escritório',c:'b-esc'};
+  return {k:'',l:'—',c:''};
+}
+function nomeGerente(id){ const g = GERENTES.find(x=>x.id===id); return g? g.nome : '—'; }
+
+async function carregar(){
+  if(!JWT){ telaPortal(); return; }
+  document.getElementById('app').innerHTML = '<div class="carregando">Carregando pessoas…</div>';
+  const j = await api('/pessoas/listar');
+  if(!j.ok){
+    if(j.error==='nao_e_diretor') telaPortal('Apenas o Diretor pode acessar o cadastro de pessoas.');
+    else if(j.error==='sem_token'||j.error==='token_invalido') telaPortal('Sessão expirada. Volte ao Portal e abra novamente.');
+    else document.getElementById('app').innerHTML = '<div class="empty">Erro ao carregar: '+(j.error||'desconhecido')+'</div>';
+    return;
+  }
+  PESSOAS = j.pessoas || [];
+  GERENTES = PESSOAS.filter(p=>p.is_gerente || p.is_diretor);
+  render();
+}
+
+function render(){
+  const linhas = PESSOAS.map(p=>{
+    const pa = papelDe(p);
+    const eq = p.is_corretor ? nomeGerente(p.gerente_id) : '—';
+    return '<tr>'+
+      '<td><b>'+(p.nome||'—')+'</b><div style="font-size:11px;color:var(--mut)">'+(p.email||'')+'</div></td>'+
+      '<td><span class="badge '+pa.c+'">'+pa.l+'</span></td>'+
+      '<td>'+eq+'</td>'+
+      '<td>'+(p.whatsapp_instancia||'—')+'</td>'+
+      '<td>'+(p.telefone||'—')+'</td>'+
+      '<td style="text-align:right"><button class="btn-mini" onclick=\'editar("'+p.id+'")\'>Editar</button></td>'+
+    '</tr>';
+  }).join('');
+
+  document.getElementById('app').innerHTML =
+    '<header>'+
+      '<div><h1>👥 Cadastro de Pessoas</h1><div class="sub">Equipe da Inerente — fonte única para todos os sistemas</div></div>'+
+      '<button class="btn-pri" onclick="novo()">+ Nova pessoa</button>'+
+    '</header>'+
+    (PESSOAS.length===0
+      ? '<div class="empty">Nenhuma pessoa cadastrada ainda.</div>'
+      : '<table><thead><tr><th>Nome</th><th>Papel</th><th>Equipe (gerente)</th><th>WhatsApp</th><th>Telefone</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table>');
+}
+
+function optsGerentes(selId){
+  return '<option value="">— sem gerente —</option>'+
+    GERENTES.map(g=>'<option value="'+g.id+'"'+(g.id===selId?' selected':'')+'>'+g.nome+'</option>').join('');
+}
+
+function modalForm(titulo, p, ehNovo){
+  const pa = p ? papelDe(p) : {k:'corretor'};
+  const ov = document.createElement('div');
+  ov.className='overlay';
+  ov.innerHTML =
+    '<div class="modal">'+
+      '<h2>'+titulo+'</h2>'+
+      '<div id="formmsg"></div>'+
+      '<div class="grid">'+
+        '<div class="full"><label>Nome *</label><input id="f_nome" value="'+(p&&p.nome?p.nome.replace(/"/g,'&quot;'):'')+'"></div>'+
+        '<div class="full"><label>Email *</label><input id="f_email" type="email" value="'+(p&&p.email?p.email:'')+'" '+(ehNovo?'':'disabled')+'>'+(ehNovo?'':'<div class="hint">O email não pode ser alterado.</div>')+'</div>'+
+        (ehNovo?'<div class="full"><label>Senha inicial *</label><input id="f_senha" type="text" placeholder="mín. 6 caracteres"></div>'
+               :'<div class="full"><label>Nova senha (opcional)</label><input id="f_senha" type="text" placeholder="deixe vazio para manter"></div>')+
+        '<div><label>Papel *</label><select id="f_papel" onchange="toggleEquipe()">'+
+          '<option value="corretor"'+(pa.k==='corretor'?' selected':'')+'>Corretor</option>'+
+          '<option value="gerente"'+(pa.k==='gerente'?' selected':'')+'>Gerente</option>'+
+          '<option value="escritorio"'+(pa.k==='escritorio'?' selected':'')+'>Escritório</option>'+
+          '<option value="diretor"'+(pa.k==='diretor'?' selected':'')+'>Diretor</option>'+
+        '</select></div>'+
+        '<div id="wrap_equipe"><label>Equipe (gerente)</label><select id="f_gerente">'+optsGerentes(p?p.gerente_id:null)+'</select></div>'+
+        '<div><label>WhatsApp (instância)</label><input id="f_wa" value="'+(p&&p.whatsapp_instancia?p.whatsapp_instancia:'')+'" placeholder="ex: LuisFernando"></div>'+
+        '<div><label>Telefone</label><input id="f_tel" value="'+(p&&p.telefone?p.telefone:'')+'"></div>'+
+        '<div><label>CPF</label><input id="f_cpf" value="'+(p&&p.cpf?p.cpf:'')+'"></div>'+
+        '<div><label>CRECI</label><input id="f_creci" value="'+(p&&p.creci?p.creci:'')+'"></div>'+
+        '<div class="full"><label>Data de entrada</label><input id="f_data" type="date" value="'+(p&&p.data_entrada?String(p.data_entrada).slice(0,10):'')+'"></div>'+
+      '</div>'+
+      '<div class="acts">'+
+        '<button class="btn-sec" onclick="fecharModal()">Cancelar</button>'+
+        '<button class="btn-pri" id="btnSalvar">Salvar</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  window._ov = ov;
+  window._editId = p ? p.id : null;
+  window._ehNovo = ehNovo;
+  toggleEquipe();
+  document.getElementById('btnSalvar').onclick = salvar;
+}
+
+function toggleEquipe(){
+  const papel = document.getElementById('f_papel').value;
+  document.getElementById('wrap_equipe').style.display = (papel==='corretor') ? 'block' : 'none';
+}
+
+function novo(){ modalForm('Nova pessoa', null, true); }
+function editar(id){ const p = PESSOAS.find(x=>x.id===id); if(p) modalForm('Editar pessoa', p, false); }
+function fecharModal(){ if(window._ov){ window._ov.remove(); window._ov=null; } }
+
+function formMsg(txt, ok){
+  document.getElementById('formmsg').innerHTML = '<div class="msg '+(ok?'msg-ok':'msg-erro')+'">'+txt+'</div>';
+}
+
+async function salvar(){
+  const nome = document.getElementById('f_nome').value.trim();
+  const email = document.getElementById('f_email').value.trim().toLowerCase();
+  const senha = document.getElementById('f_senha').value;
+  const papel = document.getElementById('f_papel').value;
+  const gerente_id = document.getElementById('f_gerente').value || null;
+  const wa = document.getElementById('f_wa').value.trim();
+  const tel = document.getElementById('f_tel').value.trim();
+  const cpf = document.getElementById('f_cpf').value.trim();
+  const creci = document.getElementById('f_creci').value.trim();
+  const data_entrada = document.getElementById('f_data').value || null;
+
+  if(!nome){ formMsg('Informe o nome.'); return; }
+  const btn = document.getElementById('btnSalvar'); btn.disabled = true; btn.textContent='Salvando…';
+
+  let j;
+  if(window._ehNovo){
+    if(!email){ formMsg('Informe o email.'); btn.disabled=false; btn.textContent='Salvar'; return; }
+    if(!senha || senha.length<6){ formMsg('Senha de no mínimo 6 caracteres.'); btn.disabled=false; btn.textContent='Salvar'; return; }
+    j = await api('/pessoas/criar','POST',{ nome, email, senha, papel, gerente_id, whatsapp_instancia:wa, telefone:tel, cpf, creci, data_entrada });
+  } else {
+    const body = { id: window._editId, nome, papel, gerente_id, whatsapp_instancia:wa, telefone:tel, cpf, creci, data_entrada };
+    if(senha) body.senha = senha;
+    j = await api('/pessoas/editar','POST',body);
+  }
+
+  if(j.ok){ fecharModal(); carregar(); }
+  else { formMsg('Erro: '+(j.error||'desconhecido')+(j.detalhe?(' — '+j.detalhe):'')); btn.disabled=false; btn.textContent='Salvar'; }
+}
+
+carregar();
+</script>
+</body>
+</html>
