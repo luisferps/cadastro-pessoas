@@ -33,7 +33,7 @@
     { frente: "imobiliaria", id: "resumogrupos", nome: "Demandas de Grupos", desc: "Demandas captadas nos grupos", icone: "📰", url: "https://leitor-de-grupos-wa.netlify.app", sso: "grupos",                       roles: ["gerente","escritorio"] },
     { frente: "imobiliaria", id: "painelbot",  nome: "Painel do Bot",     desc: "Atendimento e qualificação de leads", icone: "🤖", url: "https://qualificador-wa.netlify.app/", sso: "painelbot", roles: ["gerente","escritorio"] },
     { frente: "imobiliaria", id: "painel",    nome: "Painel de Captação OLX", desc: "Métricas do robô de captação", icone: "📊", url: "https://agentes-de-whatsapp-production.up.railway.app/captacao/painel", sso: "painel", roles: ["gerente"] },
-    { frente: "imobiliaria", id: "pessoas",   nome: "Cadastro de Pessoas", desc: "Equipe: corretores, gerentes e acessos", icone: "👥", url: "https://cadastro-pessoas-inerente.netlify.app/", ssojwt: true, roles: ["diretor"] },
+    { frente: "imobiliaria", id: "pessoas",   nome: "Cadastro de Pessoas", desc: "Equipe: corretores, gerentes e acessos", icone: "👥", url: "https://cadastro-pessoas-inerente.netlify.app/", ssojwtfull: true, roles: ["diretor"] },
     { frente: "imobiliaria", id: "vendas",     nome: "Secretaria de Vendas", desc: "VGV, comissões e relatórios", icone: "📈", interno: true, roles: ["gerente"] },
     { frente: "imobiliaria", id: "financeiro", nome: "Financeiro",           desc: "Entradas, saídas e caixa",     icone: "💰", interno: true, roles: ["gerente"] },
     { frente: "imobiliaria", id: "roleta",     nome: "Distribuição de Leads", desc: "Reparte leads entre corretores", icone: "🎯", url: "https://agentes-de-whatsapp-production.up.railway.app/roleta", roles: ["gerente","escritorio"] },
@@ -2445,17 +2445,17 @@ TESTEMUNHAS:
     carregar();
   }
 
-
+  /* ---------- INÍCIO ---------- */
   (async ()=>{
-    // SSO via ?jwt= (vindo do Portal com ssojwt:true)
+    // SSO via ?jwt=&refresh= (vindo do Portal com ssojwtfull:true)
     try{
       const params = new URLSearchParams(location.search);
-      const jwtParam = params.get('jwt');
-      if(jwtParam){
-        // Tenta usar o JWT como access_token (sem refresh_token)
-        const { data, error } = await sb.auth.setSession({ access_token: jwtParam, refresh_token: '' });
+      const at = params.get('jwt');
+      const rt = params.get('refresh');
+      if(at && rt){
+        const { data, error } = await sb.auth.setSession({ access_token: at, refresh_token: rt });
         if(!error && data && data.session && data.session.user){
-          history.replaceState({}, '', location.pathname); // limpa ?jwt= da URL
+          history.replaceState({}, '', location.pathname);
           await carregarPerfil(data.session.user);
           return;
         }
@@ -2468,6 +2468,7 @@ TESTEMUNHAS:
     }catch(e){}
     telaLogin();
   })();
+})();
 </script>
 </body>
 </html>
